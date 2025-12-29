@@ -5,8 +5,8 @@
 GWDG_BASE_URL = "https://chat-ai.academiccloud.de/v1"
 
 MODEL_MAP = {
-    "hypothesis": "deepseek-r1",
-    "probe": "deepseek-r1",
-    "adversarial": "deepseek-r1",
-    "intervention": "deepseek-r1"
+    "hypothesis": "Mistral-Large-Instruct-2407",
+    "probe": "Mistral-Large-Instruct-2407",
+    "adversarial": "Mistral-Large-Instruct-2407",
+    "intervention": "Mistral-Large-Instruct-2407"
 }
