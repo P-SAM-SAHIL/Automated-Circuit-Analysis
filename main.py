@@ -162,8 +162,8 @@ Examples:
     parser.add_argument("--targetbehaviors", nargs="*", 
                        default=[
                            "Induction (copying previous token)",
-                           "Indirect Object Identification (John gave Mary a drink)",
-                           "Previous Token Head (attending to immediate neighbor)"
+                           " name Indirect Object Identification (John gave Mary a drink)",
+                           " postion Previous Token Head (attending to immediate neighbor)"
                        ], 
                        help="List of behaviors to investigate")
     parser.add_argument("--output", default="multi_task_discovery_report.md", 

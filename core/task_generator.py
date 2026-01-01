@@ -200,40 +200,68 @@ class TaskGenerator:
 
     def _positional_prompt(self, n_pairs: int) -> str:
         return f"""
-    You are generating CLEAN / CORRUPT prompt pairs to isolate POSITIONAL ATTENTION
-    (e.g., attending to the previous token or a fixed offset).
+You are generating CLEAN / CORRUPT prompt pairs to isolate
+PREVIOUS-TOKEN ATTENTION
+(attending to the immediately preceding token).
 
-    Generate {n_pairs} pairs.
+Generate {n_pairs} pairs.
 
-    CRITICAL RULES:
-    1. Tokens must NOT repeat.
-    2. The correct prediction must depend ONLY on position.
-    3. CLEAN and CORRUPT must use the same tokens, only reordered.
-    4. Length and vocabulary MUST be identical.
-    5. Prediction position is the final token.
+CRITICAL RULES (DO NOT VIOLATE):
 
-    EXAMPLES:
+1. The model MUST PREDICT the NEXT TOKEN.
+   → Do NOT include the target token in the input.
 
-    1)
-    CLEAN:   "red blue green yellow orange"
-    CORRUPT: "blue red green yellow orange"
+2. The correct next token MUST depend ONLY on the
+   IMMEDIATELY PREVIOUS token (position i−1).
 
-    2)
-    CLEAN:   "one two three four five"
-    CORRUPT: "two one three four five"
+3. CLEAN and CORRUPT must:
+   - have IDENTICAL length
+   - use the SAME vocabulary
+   - differ ONLY in the order of earlier tokens
 
-    3)
-    CLEAN:   "alpha beta gamma delta epsilon"
-    CORRUPT: "beta alpha gamma delta epsilon"
+4. Tokens must NOT repeat.
 
-    4)
-    CLEAN:   "dog cat bird fish horse"
-    CORRUPT: "cat dog bird fish horse"
+5. The final token in CLEAN and CORRUPT MUST BE DIFFERENT,
+   so that the correct next-token prediction changes.
 
-    Return valid JSON ONLY:
-    {{
-    "pairs": [
-        {{ "clean": "...", "corrupt": "..." }}
-    ]
-    }}
+6. The prediction position is the NEXT token after the sequence.
+
+EXAMPLES:
+
+1)
+CLEAN:   "red blue green yellow"
+TARGET:  "orange"
+
+CORRUPT: "blue red green yellow"
+TARGET:  "purple"
+
+2)
+CLEAN:   "one two three four"
+TARGET:  "five"
+
+CORRUPT: "two one three four"
+TARGET:  "six"
+
+3)
+CLEAN:   "alpha beta gamma delta"
+TARGET:  "epsilon"
+
+CORRUPT: "beta alpha gamma delta"
+TARGET:  "zeta"
+
+IMPORTANT:
+- The TARGET token MUST NOT appear in the input.
+- CLEAN and CORRUPT inputs must tokenize to the SAME SHAPE.
+- The only way to predict correctly is to attend to token i−1.
+
+Return VALID JSON ONLY:
+{
+  "pairs": [
+    {
+      "clean": "...",
+      "corrupt": "..."
+    }
+  ]
+}
+
     """
