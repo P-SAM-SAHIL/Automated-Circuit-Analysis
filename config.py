@@ -5,8 +5,8 @@
 GWDG_BASE_URL = "https://chat-ai.academiccloud.de/v1"
 
 MODEL_MAP = {
-    "hypothesis": "mistral-large-instruct",
-    "probe": "mistral-large-instruct",
-    "adversarial": "mistral-large-instruct",
-    "intervention": "mistral-large-instruct"
+    "hypothesis": "llama-3.3-70b-instruct",
+    "probe": "llama-3.3-70b-instruct",
+    "adversarial": "llama-3.3-70b-instruct",
+    "intervention": "llama-3.3-70b-instruct"
 }
