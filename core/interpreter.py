@@ -250,39 +250,73 @@ class AdvancedAutomatedInterpreter:
 
         row = self.df[(self.df['layer'] == layer) & (self.df['head'] == head)].iloc[0]
 
-        context = f"""Analyze this attention head and infer the complete circuit it participates in.
+        context = f"""
+You are acting as a MECHANISTIC INTERPRETABILITY RESEARCHER.
 
-TARGET HEAD: Layer {layer}, Head {head}
+Your task is to infer a PLAUSIBLE CAUSAL CIRCUIT for a specific attention head,
+based on quantitative metrics and an attribution graph.
+
+TARGET HEAD:
+Layer {layer}, Head {head}
 
 OBSERVED METRICS:
-- Induction score: {row['induction_score']:.3f} (high = copies previous tokens)
-- Name-mover score: {row['name_mover_score']:.3f} (high = tracks entities)
-- Positional score: {row['positional_score']:.3f} (high = fixed position bias)
-- Attention entropy: {row['induction_entropy']:.3f} (low = focused attention)
+- Induction score: {row['induction_score']:.3f}
+- Name-mover score: {row['name_mover_score']:.3f}
+- Positional score: {row['positional_score']:.3f}
+- Attention entropy: {row['induction_entropy']:.3f}
 
+ATTRIBUTION GRAPH:
 {self.format_graph_for_llm(layer, head)}
 
-Generate {max_hypotheses} CIRCUIT-LEVEL hypotheses. For each, specify:
-1. circuit_path: List of [layer, head] pairs forming the pathway (e.g. [[0, 7], [5, 1]])
-2. mechanism: High-level algorithm description
-3. predicted_behavior: Testable prediction
-4. test_strategy: Where should we look for the activation? 
-   - "last" (for induction, movement, next-token prediction)
-   - "max" (for detecting a specific word/feature anywhere in text)
-   - "first" (for BOS or position 0 heads)
+IMPORTANT CONSTRAINTS:
+- A circuit MUST reflect INFORMATION FLOW, not correlation.
+- Earlier layers feed into later layers (no backward causation).
+- Do NOT invent heads unrelated to the attribution graph.
+- Prefer SHORT circuits (1–3 heads).
+- If evidence is weak, state a minimal circuit.
 
-Return JSON array:
+VALID MECHANISM EXAMPLES (DO NOT COPY VERBATIM):
+
+Induction example:
+- circuit_path: [[3, 2], [5, 5]]
+- mechanism: "Copies the token following a repeated prefix via induction"
+- predicted_behavior: "When token A appears twice, token B is predicted next"
+- test_strategy: "last"
+
+Name-mover example:
+- circuit_path: [[6, 1], [8, 4]]
+- mechanism: "Tracks indirect object identity across a transfer verb"
+- predicted_behavior: "Correctly resolves who received the object"
+- test_strategy: "last"
+
+Positional example:
+- circuit_path: [[1, 0]]
+- mechanism: "Attends to the immediately previous token"
+- predicted_behavior: "Prediction depends only on token at position i−1"
+- test_strategy: "last"
+
+YOUR TASK:
+Generate up to {max_hypotheses} DISTINCT circuit hypotheses.
+
+For EACH hypothesis, specify:
+1. circuit_path: list of [layer, head]
+2. mechanism: concrete algorithmic description (no vague words)
+3. predicted_behavior: a falsifiable claim
+4. test_strategy: one of ["last", "max", "first", "mean"]
+
+Return VALID JSON ONLY:
 {{
   "hypotheses": [
     {{
       "circuit_path": [[0, 1]],
       "mechanism": "...",
       "predicted_behavior": "...",
-      "test_strategy": "last"  <-- ADD THIS FIELD
+      "test_strategy": "last"
     }}
   ]
 }}
 """
+
 
         try:
             response_content = self.client.chat(
@@ -333,20 +367,47 @@ Return JSON array:
         """Automated probe design and validation"""
         print(f"  Designing probe for: {hypothesis.mechanism[:50]}...")
 
-        probe_prompt = f"""Generate {n_samples} labeled text examples to test: "{hypothesis.mechanism}"
+        probe_prompt = probe_prompt = f"""
+You are designing a PROBE DATASET for MECHANISTIC VALIDATION.
 
-Predicted behavior: {hypothesis.predicted_behavior}
+TARGET MECHANISM:
+"{hypothesis.mechanism}"
 
-Create {n_samples//2} POSITIVE examples (feature present) and {n_samples//2} NEGATIVE examples (feature absent).
+PREDICTED BEHAVIOR:
+"{hypothesis.predicted_behavior}"
 
-Return JSON:
+GOAL:
+Create a dataset where POSITIVE and NEGATIVE examples differ
+ONLY in the presence of the predicted behavior.
+
+STRICT RULES:
+1. POSITIVE examples MUST trigger the predicted behavior.
+2. NEGATIVE examples MUST be almost identical but break the mechanism.
+3. Do NOT use obvious semantic cues.
+4. Do NOT vary sentence length unnecessarily.
+5. Avoid trivial word overlap patterns.
+
+GOOD EXAMPLE (for induction):
+POSITIVE: "The cat sat down . The cat sat"
+NEGATIVE: "The cat sat down . The dog sat"
+
+GOOD EXAMPLE (for name-mover):
+POSITIVE: "John gave Mary a book and then John thanked"
+NEGATIVE: "Mary gave John a book and then John thanked"
+
+Generate exactly {n_samples} examples:
+- {n_samples//2} POSITIVE
+- {n_samples//2} NEGATIVE
+
+Return VALID JSON ONLY:
 {{
   "examples": [
-    {{"text": "The cat saw the cat", "has_feature": true}},
-    {{"text": "Dogs like bones", "has_feature": false}}
+    {{ "text": "...", "has_feature": true }},
+    {{ "text": "...", "has_feature": false }}
   ]
 }}
 """
+
 
         try:
             response_content = self.client.chat(
@@ -438,26 +499,65 @@ Return JSON:
     def generate_adversarial_prompts(self, hypothesis: CircuitHypothesis,
                                      n_prompts: int = 5) -> List[str]:
         """Generate out-of-distribution and adversarial test cases"""
-        prompt_request = f"""Generate {n_prompts} ADVERSARIAL test prompts for: "{hypothesis.mechanism}"
+        prompt_request = f"""
+You are generating ADVERSARIAL TEST PROMPTS for MECHANISTIC VALIDATION.
 
-Predicted behavior: {hypothesis.predicted_behavior}
+TARGET MECHANISM:
+"{hypothesis.mechanism}"
 
-Include:
-1. Edge cases that break the hypothesis if wrong
-2. Out-of-distribution examples (unusual tokens, syntax)
-3. Counterfactuals testing boundary conditions
+PREDICTED BEHAVIOR:
+"{hypothesis.predicted_behavior}"
 
-Examples:
-- Pure repetition: "AAA AAA AAA"
-- Nonsense: "xQz xQz mNp"
-- Special chars: "🐱→🐱 🐱"
-- Syntactic edge: "The the the the"
+GOAL:
+Generate prompts that are:
+- minimally different from normal cases
+- specifically designed to BREAK this mechanism if it is real
 
-Return JSON:
+STRICT RULES:
+1. Prompts must LOOK natural (no random symbols or emojis).
+2. Each prompt should remove or weaken the exact signal used by the mechanism.
+3. Do NOT destroy overall sentence coherence.
+4. Do NOT introduce unrelated noise.
+
+MECHANISM-SPECIFIC GUIDANCE:
+
+If the mechanism involves INDUCTION:
+- Break repetition (A B ... A → ?)
+- Replace the second A with a near synonym or different token
+- Keep all other structure identical
+
+If the mechanism involves NAME-MOVER:
+- Add distractor clauses
+- Introduce role ambiguity
+- Swap semantic roles without changing surface order
+
+If the mechanism involves POSITION:
+- Insert filler tokens
+- Shift token positions subtly
+- Preserve vocabulary but change offsets
+
+GOOD EXAMPLES:
+
+Induction:
+- "The cat sat down . The dog sat"
+- "Alice went home early . Bob went"
+
+Name-mover:
+- "John gave Mary a book and Mary thanked"
+- "Alice sent Bob a letter before Bob replied"
+
+Positional:
+- "red blue green yellow"
+- "blue red green yellow"
+
+Generate exactly {n_prompts} prompts.
+
+Return VALID JSON ONLY:
 {{
-  "prompts": ["prompt1", "prompt2", "prompt3", "prompt4", "prompt5"]
+  "prompts": ["...", "...", "..."]
 }}
 """
+
 
         try:
             response_content = self.client.chat(
@@ -493,20 +593,57 @@ Return JSON:
 
     def generate_intervention_experiment(self, hypothesis: CircuitHypothesis) -> Dict:
         """LLM designs custom intervention experiment"""
-        prompt = f"""Design an intervention experiment to test: "{hypothesis.mechanism}"
+        prompt = prompt = f"""
+You are designing a CAUSAL INTERVENTION EXPERIMENT
+for a hypothesized MECHANISTIC CIRCUIT.
 
-Circuit path: {' → '.join([f'L{l}.H{h}' for l, h in hypothesis.circuit_path])}
+TARGET MECHANISM:
+"{hypothesis.mechanism}"
 
-Specify a causal intervention.
+CIRCUIT PATH:
+{' → '.join([f'L{l}.H{h}' for l, h in hypothesis.circuit_path])}
 
-Return JSON:
+GOAL:
+Test whether this circuit is CAUSALLY NECESSARY or SUFFICIENT.
+
+STRICT RULES:
+1. Specify ONE clear intervention.
+2. The intervention must target a SPECIFIC component.
+3. The expected outcome must be FALSIFIABLE.
+4. Avoid vague statements like "performance changes".
+
+ALLOWED INTERVENTIONS:
+- ablate (set activation to zero)
+- amplify (scale activation)
+- swap (replace with clean activation)
+
+TARGET POSITIONS:
+- "last" (prediction token)
+- "all" (entire sequence)
+
+GOOD EXAMPLES:
+
+Induction (necessity):
+- ablate L5.H5 at last token → next-token accuracy drops on repetition prompts
+
+Name-mover (necessity):
+- ablate L6.H1 → incorrect indirect object resolution
+
+Positional (sufficiency):
+- amplify L1.H0 → stronger dependence on previous token
+
+Return VALID JSON ONLY:
 {{
-  "intervention_type": "ablate",
-  "target_component": {{"layer": {hypothesis.target_layer}, "head": {hypothesis.target_head}}},
-  "target_position": "all",
-  "expected_outcome": "what should happen to model output"
+  "intervention_type": "ablate | amplify | swap",
+  "target_component": {{
+    "layer": {hypothesis.target_layer},
+    "head": {hypothesis.target_head}
+  }},
+  "target_position": "last | all",
+  "expected_outcome": "specific, falsifiable prediction"
 }}
 """
+
 
         try:
             response_content = self.client.chat(
@@ -639,12 +776,25 @@ Return JSON:
 
         # Metric 4: Faithfulness
         faith_scores = []
-        if len(self.induction_pairs) > 0:
-            for pair in self.induction_pairs:
-                delta = patch_head_delta(pair, hypothesis.target_layer, hypothesis.target_head, self.model)
-                faith_scores.append(abs(delta) / (pair['corrupt_loss'] + 1e-8))
+        
+        # Test on the first 5 pairs to save compute time
+        test_pairs = self.induction_pairs
+        
+        if len(test_pairs) > 0:
+            for pair in test_pairs:
+                try:
+                    score = self._calculate_faithful_recovery(hypothesis, pair)
+                    faith_scores.append(score)
+                except KeyError:
+                    print("Warning: 'clean_loss' missing. Did you update TaskGenerator?")
+                    faith_scores.append(0.0)
 
-        faith_score = float(np.mean(faith_scores)) if faith_scores else 0.0
+        # Average the recovery scores
+        avg_recovery = float(np.mean(faith_scores)) if faith_scores else 0.0
+        
+        # Clip between 0.0 and 1.0 (standard for interpretabilty reports)
+        faith_score = max(0.0, min(1.0, avg_recovery))
+        
         hypothesis.validation_scores['faithfulness'] = faith_score
 
         # Combined validation score
@@ -668,33 +818,67 @@ Return JSON:
             'verdict': 'SUPPORTED' if overall_score > 0.5 else 'WEAK' if overall_score > 0.3 else 'REJECTED'
         }
 
-        # Human review for borderline cases
-        if human_review and 0.3 < overall_score < 0.7:
-            print(f"\n{'='*70}")
-            print(f" HUMAN REVIEW REQUESTED")
-            print(f"{'='*70}")
-            print(f"Circuit: {' → '.join([f'L{l}.H{h}' for l, h in hypothesis.circuit_path])}")
-            print(f"Mechanism: {hypothesis.mechanism}")
-            print(f"\nValidation Scores:")
-            print(f"  - Probe Accuracy: {probe_score:.3f}")
-            print(f"  - Adversarial KL: {adv_kl_score:.3f}")
-            print(f"  - Intervention Effect: {intervention_score:.3f}")
-            print(f"  - Faithfulness: {faith_score:.3f}")
-            print(f"  - Overall: {overall_score:.3f}")
 
-            user_input = input("\n Accept this hypothesis? (y/n/skip): ").lower()
-            if user_input == 'n':
-                result['verdict'] = 'HUMAN_REJECTED'
-            elif user_input == 'y':
-                result['verdict'] = 'HUMAN_CONFIRMED'
-                hypothesis.confidence = 1.0
 
         print(f"\n{'='*70}")
         print(f"VERDICT: {result['verdict']} (score: {overall_score:.3f})")
         print(f"{'='*70}")
 
         return result
+# In core/interpreter.py inside AdvancedAutomatedInterpreter class
 
+    def _calculate_faithful_recovery(self, hypothesis: CircuitHypothesis, pair: Dict) -> float:
+        """
+        Calculates Fraction of Performance Recovered (Sufficiency).
+        1.0 = Circuit fully explains the task.
+        0.0 = Circuit does nothing.
+        """
+        clean_cache = pair["clean_cache"]
+        corrupt_tokens = pair["corrupt_tokens"]
+        
+        # Use the pre-computed losses from TaskGenerator
+        clean_loss = pair["clean_loss"]
+        corrupt_loss = pair["corrupt_loss"]
+
+        total_degradation = corrupt_loss - clean_loss
+        
+        # If the corruption didn't actually break the model, skip
+        if total_degradation < 1e-6:
+            return 0.0
+
+        # Optimization: Group heads by layer to avoid duplicate hooks
+        heads_by_layer = {}
+        for l, h in hypothesis.circuit_path:
+            heads_by_layer.setdefault(l, []).append(h)
+
+        def circuit_patch_hook(z, hook):
+            layer = hook.layer()
+            if layer not in heads_by_layer:
+                return z
+
+            clean_z = clean_cache[hook.name]
+            z = z.clone()
+            # Restore ALL heads in this layer to their clean state
+            for h in heads_by_layer[layer]:
+                z[:, :, h, :] = clean_z[:, :, h, :]
+            return z
+
+        # Register ONE hook per layer
+        hooks = [
+            (get_act_name("z", layer), circuit_patch_hook)
+            for layer in heads_by_layer.keys()
+        ]
+
+        with torch.no_grad():
+            patched_loss = self.model.run_with_hooks(
+                corrupt_tokens,
+                return_type="loss",
+                fwd_hooks=hooks
+            ).item()
+
+        # Calculation: (Bad - Patched) / (Bad - Good)
+        recovery = (corrupt_loss - patched_loss) / total_degradation
+        return recovery
 
     # ============================================================
     # PART 7: MAIN AUTOMATION LOOP
