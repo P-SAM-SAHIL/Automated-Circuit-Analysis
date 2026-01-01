@@ -200,6 +200,8 @@ class TaskGenerator:
 
     def _positional_prompt(self, n_pairs: int) -> str:
         return f"""
+
+
 You are generating CLEAN / CORRUPT prompt pairs to isolate
 PREVIOUS-TOKEN ATTENTION
 (attending to the immediately preceding token).
@@ -208,60 +210,40 @@ Generate {n_pairs} pairs.
 
 CRITICAL RULES (DO NOT VIOLATE):
 
-1. The model MUST PREDICT the NEXT TOKEN.
-   → Do NOT include the target token in the input.
-
-2. The correct next token MUST depend ONLY on the
-   IMMEDIATELY PREVIOUS token (position i−1).
-
+1. The final token in the sequence MUST be predicted by the model.
+2. The correct prediction MUST depend ONLY on the IMMEDIATELY PREVIOUS token.
 3. CLEAN and CORRUPT must:
    - have IDENTICAL length
    - use the SAME vocabulary
-   - differ ONLY in the order of earlier tokens
-
+   - differ ONLY in the token at position i−1
 4. Tokens must NOT repeat.
-
-5. The final token in CLEAN and CORRUPT MUST BE DIFFERENT,
-   so that the correct next-token prediction changes.
-
-6. The prediction position is the NEXT token after the sequence.
+5. All tokens BEFORE the final two positions must be identical.
 
 EXAMPLES:
 
 1)
-CLEAN:   "red blue green yellow"
-TARGET:  "orange"
-
-CORRUPT: "blue red green yellow"
-TARGET:  "purple"
+CLEAN:   "red blue green yellow orange"
+CORRUPT: "red blue green yellow purple"
 
 2)
-CLEAN:   "one two three four"
-TARGET:  "five"
-
-CORRUPT: "two one three four"
-TARGET:  "six"
+CLEAN:   "one two three four five"
+CORRUPT: "one two three four six"
 
 3)
-CLEAN:   "alpha beta gamma delta"
-TARGET:  "epsilon"
-
-CORRUPT: "beta alpha gamma delta"
-TARGET:  "zeta"
+CLEAN:   "alpha beta gamma delta epsilon"
+CORRUPT: "alpha beta gamma delta zeta"
 
 IMPORTANT:
-- The TARGET token MUST NOT appear in the input.
-- CLEAN and CORRUPT inputs must tokenize to the SAME SHAPE.
-- The only way to predict correctly is to attend to token i−1.
+- The model predicts the FINAL token.
+- The ONLY difference is the token at position i−1.
+- The prediction must change if and only if attention to i−1 changes.
 
-Return VALID JSON ONLY:
-{
+Return valid JSON ONLY:
+{{
   "pairs": [
-    {
-      "clean": "...",
-      "corrupt": "..."
-    }
+    {{ "clean": "...", "corrupt": "..." }}
   ]
-}
+}}
+
 
     """
