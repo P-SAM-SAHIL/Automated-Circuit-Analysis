@@ -8,4 +8,4 @@ python main.py \
   --maxpairs 30 \
   --topkheads 20 \
   --targetbehaviors "Induction"
-   --apikey ""
+  --apikey ""
