@@ -7,5 +7,5 @@ python main.py \
   --npairs 30 \
   --maxpairs 30 \
   --topkheads 20 \
-  --targetbehaviors "Induction"
+  --targetbehaviors "Induction" \
   --apikey ""
