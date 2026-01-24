@@ -1,6 +1,6 @@
 for full documentation follow this link : https://docs.google.com/document/d/1zLDJbHIbrZZW81yNFEMKEFA-lcA9ikAeHAkOgEDTXMQ/edit?usp=sharing
 
-Packages required : pip install transformer-lens circuitsvis \
+Packages required : pip install transformer-lens circuitsvis networkx\
 
 Example for Runing : \
 python main.py \
