@@ -91,7 +91,10 @@ class AdvancedAutomatedInterpreter:
                 add_sender_hooks=True,
                 add_receiver_hooks=False,
                 remove_redundant=False,
-                show_full_index=False
+                show_full_index=False,
+                use_hook_mlp_in=True,      
+                use_attn_result=True,      
+                use_split_qkv_input=True
             )
 
             # 4. RUN RECURSIVE PRUNING
