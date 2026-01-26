@@ -48,8 +48,21 @@ class AdvancedAutomatedInterpreter:
             
             # 1. PREPARE DATA TENSORS
             # Stack list of pairs into a single batch [Batch, Seq]
-            clean_data = torch.stack([p["clean_tokens"].squeeze(0) for p in data])
-            corrupt_data = torch.stack([p["corrupt_tokens"].squeeze(0) for p in data])
+            max_len = max([p["clean_tokens"].shape[-1] for p in data])
+            def pad_seq(seq, max_l, pad_token):
+                        # seq is [1, len]. We want [1, max_l]
+                        curr_l = seq.shape[-1]
+                        if curr_l == max_l: return seq
+                        # Pad left ensures the last token (prediction) remains at the end
+                        # Using model's pad token or 50256 (EOS) for GPT-2
+                        pad_amt = max_l - curr_l
+                        return F.pad(seq, (pad_amt, 0), "constant", pad_token)
+
+            pad_token = self.model.tokenizer.pad_token_id if self.model.tokenizer.pad_token_id else 50256
+
+        # 3. Apply padding
+            clean_data = [pad_seq(p["clean_tokens"], max_len, pad_token).squeeze(0) for p in data]
+            corrupt_data = [pad_seq(p["corrupt_tokens"], max_len, pad_token).squeeze(0) for p in data]
 
             # 2. DEFINE ACDC METRIC (KL Divergence) - CRITICAL FIX APPLIED
             # We perform the slice [:, -1, :] here to ensure shapes match ACDC default metric
