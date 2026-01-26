@@ -67,7 +67,8 @@ class AdvancedAutomatedInterpreter:
             # 2. DEFINE ACDC METRIC (KL Divergence) - CRITICAL FIX APPLIED
             # We perform the slice [:, -1, :] here to ensure shapes match ACDC default metric
             with torch.no_grad():
-                clean_logits = self.model(clean_data)
+                
+                clean_logits = self.model(clean_data, prepend_bos=False)
                 clean_log_probs = F.log_softmax(clean_logits[:, -1, :], dim=-1)
 
             def acdc_metric(logits):
