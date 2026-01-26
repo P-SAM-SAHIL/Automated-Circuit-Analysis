@@ -40,32 +40,30 @@ class AdvancedAutomatedInterpreter:
     # ============================================================
 
     def build_attribution_graph(self, data: List[Dict], threshold: float = 0.05):
-            """
-            Executes ACDC (Automatic Circuit DisCovery) to find the attribution graph.
-            Ref: arXiv:2304.14997v4
-            """
-            print(f"Building Attribution Graph using ACDC (Threshold: {threshold})...")
+            print(f"Building Attribution Graph (Threshold: {threshold})...")
             
-            # 1. PREPARE DATA TENSORS
-            # Stack list of pairs into a single batch [Batch, Seq]
+            # 1. Handle Variable Lengths via Left Padding
+            # : Visualizing [PAD, PAD, T1, T2] alignment
             max_len = max([p["clean_tokens"].shape[-1] for p in data])
-            def pad_seq(seq, max_l, pad_token):
-                        # seq is [1, len]. We want [1, max_l]
-                        curr_l = seq.shape[-1]
-                        if curr_l == max_l: return seq
-                        # Pad left ensures the last token (prediction) remains at the end
-                        # Using model's pad token or 50256 (EOS) for GPT-2
-                        pad_amt = max_l - curr_l
-                        return F.pad(seq, (pad_amt, 0), "constant", pad_token)
-
             pad_token = self.model.tokenizer.pad_token_id if self.model.tokenizer.pad_token_id else 50256
 
-        # 3. Apply padding
-            clean_data = [pad_seq(p["clean_tokens"], max_len, pad_token).squeeze(0) for p in data]
-            corrupt_data = [pad_seq(p["corrupt_tokens"], max_len, pad_token).squeeze(0) for p in data]
+            def pad_seq(seq, max_l, pad_token):
+                curr_l = seq.shape[-1]
+                if curr_l == max_l: return seq
+                return F.pad(seq, (max_l - curr_l, 0), "constant", pad_token)
 
-            # 2. DEFINE ACDC METRIC (KL Divergence) - CRITICAL FIX APPLIED
-            # We perform the slice [:, -1, :] here to ensure shapes match ACDC default metric
+            clean_list = [pad_seq(p["clean_tokens"], max_len, pad_token).squeeze(0) for p in data]
+            corrupt_list = [pad_seq(p["corrupt_tokens"], max_len, pad_token).squeeze(0) for p in data]
+
+            # FIX: Force Long (int64) type. F.pad might have altered dtype or layout.
+            clean_data = torch.stack(clean_list).long()
+            corrupt_data = torch.stack(corrupt_list).long()
+
+            # DEBUG: Verify tensor properties
+            print(f"DEBUG: Data Shape: {clean_data.shape}, Dtype: {clean_data.dtype}, Device: {clean_data.device}")
+
+                # 2. DEFINE ACDC METRIC (KL Divergence) - CRITICAL FIX APPLIED
+                # We perform the slice [:, -1, :] here to ensure shapes match ACDC default metric
             with torch.no_grad():
                 
                 clean_logits = self.model(clean_data, prepend_bos=False)
