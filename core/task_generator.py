@@ -13,9 +13,14 @@ from config import MODEL_MAP
 
 class TaskGenerator:
     """
-    Generates task-specific CLEAN / CORRUPT datasets for ACDC-style analysis.
-    One task → one causal mechanism → one prompt template.
-    """
+TaskGenerator responsibility:
+- Generate CLEAN / CORRUPT prompt pairs
+- Ensure identical token length and positions
+- No metrics, no caches, no losses
+"""
+
+
+
 
     def __init__(self, client: RobustLLMClient, model: HookedTransformer):
         self.client = client
@@ -76,8 +81,8 @@ class TaskGenerator:
                 clean_text = p["clean"]
                 corrupt_text = p["corrupt"]
 
-                clean_tokens = self.model.to_tokens(clean_text)
-                corrupt_tokens = self.model.to_tokens(corrupt_text)
+                clean_tokens = self.model.to_tokens(clean_text).to(self.model.cfg.device)
+                corrupt_tokens = self.model.to_tokens(corrupt_text).to(self.model.cfg.device)
 
                 # Critical ACDC constraint
                 if clean_tokens.shape != corrupt_tokens.shape:
@@ -86,23 +91,22 @@ class TaskGenerator:
                 # Clean cache
 # 1. Run Clean Pass (Get Cache AND Loss)
                 with torch.no_grad():
-                    # Calculate clean_loss as the "Perfect" baseline
-                    clean_loss = self.model(clean_tokens, return_type="loss").item()
-                    _, clean_cache = self.model.run_with_cache(clean_tokens)
-                
-                # 2. Run Corrupt Pass (Get Baseline Loss)
-                with torch.no_grad():
-                    corrupt_loss = self.model(corrupt_tokens, return_type="loss").item()
+                     clean_loss = self.model(clean_tokens, return_type="loss").item()
+                     corrupt_loss = self.model(corrupt_tokens, return_type="loss").item()
+                     # Clean cache is needed for ACDC later
+                     _, clean_cache = self.model.run_with_cache(clean_tokens)
 
                 # 3. Structure exactly as your Interpreter expects
                 formatted_data.append({
-                    "clean_cache": clean_cache,
-                    "corrupt_tokens": corrupt_tokens,
-                    "clean_loss": clean_loss,       # <--- THIS IS THE CRITICAL NEW FIELD
-                    "corrupt_loss": corrupt_loss,
-                    "clean_text": clean_text,
-                    "corrupt_text": corrupt_text
-                })
+                                    "clean_tokens": clean_tokens,
+                                    "clean_cache": clean_cache, 
+                                    "corrupt_tokens": corrupt_tokens,
+                                    "clean_loss": clean_loss,
+                                    "corrupt_loss": corrupt_loss,
+                                    "clean_text": p["clean"],
+                                    "corrupt_text": p["corrupt"]
+                                })
+
 
             except Exception:
                 continue
