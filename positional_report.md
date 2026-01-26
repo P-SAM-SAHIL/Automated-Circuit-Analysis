@@ -1,0 +1,226 @@
+
+
+# RESULTS FOR: Previous Token Head (attending to immediate neighbor)
+#  Automated Circuit Discovery Report
+
+## Methodology
+
+This analysis uses:
+1. **Attribution Graph Extraction** - ACDC-style edge importance
+2. **Circuit-Level Reasoning** - LLM interprets computational graphs
+3. **Automated Probe Design** - Validates predicted features
+4. **Adversarial Testing** - OOD and counterfactual inputs
+5. **Custom Interventions** - LLM-designed causal experiments
+
+## Summary Statistics
+
+- Heads Analyzed: 3
+- Total Hypotheses: 12
+- Supported (>0.5): 0
+- Weak (0.3-0.5): 0
+- Rejected (<0.3): 12
+
+## Discovered Circuits
+
+
+### Layer 0, Head 0
+
+**Hypothesis 1**: Attends to the current token's positional information
+
+**Circuit Path**: L0.H0
+
+**Verdict**: REJECTED (Overall Score: 0.179)
+
+**Validation Metrics**:
+- Probe Accuracy: 0.500
+- Adversarial KL Divergence: 0.003
+- Intervention Effect: 0.012
+- Faithfulness: 0.000
+
+---
+
+**Hypothesis 2**: Uses the current token as a reference point for positional encoding
+
+**Circuit Path**: L0.H0
+
+**Verdict**: REJECTED (Overall Score: 0.154)
+
+**Validation Metrics**:
+- Probe Accuracy: 0.433
+- Adversarial KL Divergence: 0.002
+- Intervention Effect: 0.007
+- Faithfulness: 0.000
+
+---
+
+**Hypothesis 3**: Attends to the current token's positional information
+
+**Circuit Path**: L0.H0
+
+**Verdict**: REJECTED (Overall Score: 0.193)
+
+**Validation Metrics**:
+- Probe Accuracy: 0.533
+- Adversarial KL Divergence: 0.005
+- Intervention Effect: 0.021
+- Faithfulness: 0.000
+
+---
+
+**Hypothesis 4**: Copies the token at the current position based on positional encoding
+
+**Circuit Path**: L0.H0
+
+**Verdict**: REJECTED (Overall Score: 0.167)
+
+**Validation Metrics**:
+- Probe Accuracy: 0.463
+- Adversarial KL Divergence: 0.007
+- Intervention Effect: 0.015
+- Faithfulness: 0.000
+
+---
+
+
+### Layer 0, Head 1
+
+**Hypothesis 1**: Attends to the current token and slightly considers the positional information of the previous token
+
+**Circuit Path**: L0.H1
+
+**Verdict**: REJECTED (Overall Score: 0.181)
+
+**Validation Metrics**:
+- Probe Accuracy: 0.463
+- Adversarial KL Divergence: 0.067
+- Intervention Effect: 0.009
+- Faithfulness: 0.000
+
+---
+
+**Hypothesis 2**: Uses positional encoding to attend to the token at a fixed position relative to the current token
+
+**Circuit Path**: L0.H1
+
+**Verdict**: REJECTED (Overall Score: 0.158)
+
+**Validation Metrics**:
+- Probe Accuracy: 0.426
+- Adversarial KL Divergence: 0.029
+- Intervention Effect: 0.008
+- Faithfulness: 0.000
+
+---
+
+**Hypothesis 3**: Attends to the current token and its immediately preceding context
+
+**Circuit Path**: L0.H1
+
+**Verdict**: REJECTED (Overall Score: 0.191)
+
+**Validation Metrics**:
+- Probe Accuracy: 0.500
+- Adversarial KL Divergence: 0.039
+- Intervention Effect: 0.024
+- Faithfulness: 0.000
+
+---
+
+**Hypothesis 4**: Tracks the positional offset of the current token
+
+**Circuit Path**: L0.H1
+
+**Verdict**: REJECTED (Overall Score: 0.172)
+
+**Validation Metrics**:
+- Probe Accuracy: 0.463
+- Adversarial KL Divergence: 0.030
+- Intervention Effect: 0.012
+- Faithfulness: 0.000
+
+---
+
+
+### Layer 0, Head 2
+
+**Hypothesis 1**: Attends to the current token and its positional context
+
+**Circuit Path**: L0.H2
+
+**Verdict**: REJECTED (Overall Score: 0.194)
+
+**Validation Metrics**:
+- Probe Accuracy: 0.533
+- Adversarial KL Divergence: 0.009
+- Intervention Effect: 0.019
+- Faithfulness: 0.000
+
+---
+
+**Hypothesis 2**: Uses positional encoding to focus on adjacent tokens
+
+**Circuit Path**: L0.H2
+
+**Verdict**: REJECTED (Overall Score: 0.169)
+
+**Validation Metrics**:
+- Probe Accuracy: 0.463
+- Adversarial KL Divergence: 0.018
+- Intervention Effect: 0.009
+- Faithfulness: 0.000
+
+---
+
+**Hypothesis 3**: Attends to the token at a fixed positional offset, weighted by its distance
+
+**Circuit Path**: L0.H2
+
+**Verdict**: REJECTED (Overall Score: 0.171)
+
+**Validation Metrics**:
+- Probe Accuracy: 0.463
+- Adversarial KL Divergence: 0.014
+- Intervention Effect: 0.020
+- Faithfulness: 0.000
+
+---
+
+**Hypothesis 4**: Tracks the immediately preceding token, with a focus on its positional context
+
+**Circuit Path**: L0.H2
+
+**Verdict**: REJECTED (Overall Score: 0.179)
+
+**Validation Metrics**:
+- Probe Accuracy: 0.505
+- Adversarial KL Divergence: 0.009
+- Intervention Effect: 0.002
+- Faithfulness: 0.000
+
+---
+
+
+## Interpretation Notes
+
+### High Probe Accuracy (>0.7)
+Indicates the head reliably represents the predicted feature in its activations.
+
+### High Adversarial KL (>0.5)
+The head significantly affects output distribution even on OOD inputs - strong causal role.
+
+### High Intervention Effect (>0.3)
+Custom interventions produce measurable effects - confirms causal importance.
+
+### High Faithfulness (>0.5)
+Activation patching shows the head is causally necessary for the behavior.
+
+## Next Steps
+
+1. Investigate top-scoring circuits in detail
+2. Test on additional task-specific datasets
+3. Extend to deeper circuit analysis (3+ component interactions)
+4. Compare findings with manual interpretability research
+
+---
+*Generated by Advanced Automated Interpretability Agent*
+*Methodology based on ACDC [Conmy et al.], MAIA [Rott Shaham et al.], and Neel Nanda's research*
