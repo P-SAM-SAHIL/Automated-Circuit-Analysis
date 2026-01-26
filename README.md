@@ -14,4 +14,5 @@ python main.py \
   --apikey "" \
   --npairs 50 \
   --threshold 0.05 \
-  --behaviors "Induction"
+  --behaviors "Induction" \
+  --output_file "experiment_results_v2.txt"
