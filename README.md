@@ -1,14 +1,17 @@
 for full documentation follow this link : https://docs.google.com/document/d/1zLDJbHIbrZZW81yNFEMKEFA-lcA9ikAeHAkOgEDTXMQ/edit?usp=sharing
 
-Packages required : pip install transformer-lens circuitsvis networkx\
+Clone : !git clone https://github.com/P-SAM-SAHIL/Automated-Circuit-Analysis.git \
+Packages required :
+!pip install transformer_lens openai wandb scikit-learn einops jaxtyping \
+!apt install libgraphviz-dev \
+!pip install pygraphviz  \
+
+%cd /content/Automated-Circuit-Analysis
 
 Example for Runing : \
 python main.py \
-  --model gpt2-small \
-  --device cuda \
-  --npairs 30 \
-  --maxpairs 30 \
-  --topkheads 20 \
-  --targetbehaviors "Induction" \
-   --output my_report.md \
-  --apikey ""
+  --model "gpt2-small" \
+  --apikey "" \
+  --npairs 50 \
+  --threshold 0.05 \
+  --behaviors "Induction"
