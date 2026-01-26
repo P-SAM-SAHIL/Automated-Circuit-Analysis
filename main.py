@@ -19,7 +19,19 @@ def main():
 
     # --- INITIALIZE ---
     client = RobustLLMClient(base_url=GWDG_BASE_URL, api_key=args.apikey)
-    model = HookedTransformer.from_pretrained(args.model, device="cuda" if torch.cuda.is_available() else "cpu")
+    model = HookedTransformer.from_pretrained(
+        args.model, 
+        device="cuda" if torch.cuda.is_available() else "cpu",
+        # Pass the config flags here instead
+        fold_ln=False, 
+        center_writing_weights=False, 
+        center_unembed=False,
+        # If you wanted these features:
+        # fold_value_biases=False,
+    )
+    
+   
+    model.set_use_split_qkv_input(True)
     
     task_gen = TaskGenerator(client, model)
     interpreter = AdvancedAutomatedInterpreter(model, client)
