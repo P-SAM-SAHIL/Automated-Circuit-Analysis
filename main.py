@@ -21,12 +21,14 @@ def main():
     client = RobustLLMClient(base_url=GWDG_BASE_URL, api_key=args.apikey)
     model = HookedTransformer.from_pretrained(
         args.model, 
-        device="cuda" if torch.cuda.is_available() else "cpu",
-        use_hook_mlp_in=True,      # Required for ACDC to see MLP edges
-        use_split_qkv_input=True,  # Required for ACDC to see Q/K/V edges
-        use_attn_result=True       # Required for ACDC to see Head output edges
+        device="cuda" if torch.cuda.is_available() else "cpu"
     )
-    
+
+    # 2. Enable ACDC-specific hooks using the setter methods
+    # (These exist specifically to toggle features after loading)
+    model.set_use_hook_mlp_in(True)       # Required for ACDC to see MLP inputs
+    model.set_use_split_qkv_input(True)   # Required for ACDC to see Q/K/V inputs separately
+    model.set_use_attn_result(True)
    
     
     
