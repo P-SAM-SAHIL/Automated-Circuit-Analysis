@@ -22,16 +22,13 @@ def main():
     model = HookedTransformer.from_pretrained(
         args.model, 
         device="cuda" if torch.cuda.is_available() else "cpu",
-        # Pass the config flags here instead
-        fold_ln=False, 
-        center_writing_weights=False, 
-        center_unembed=False,
-        # If you wanted these features:
-        # fold_value_biases=False,
+        use_hook_mlp_in=True,      # Required for ACDC to see MLP edges
+        use_split_qkv_input=True,  # Required for ACDC to see Q/K/V edges
+        use_attn_result=True       # Required for ACDC to see Head output edges
     )
     
    
-    model.set_use_split_qkv_input(True)
+    
     
     task_gen = TaskGenerator(client, model)
     interpreter = AdvancedAutomatedInterpreter(model, client)
