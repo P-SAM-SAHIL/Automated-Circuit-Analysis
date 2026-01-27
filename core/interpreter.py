@@ -197,37 +197,55 @@ class AdvancedAutomatedInterpreter:
 
 # ... inside AdvancedAutomatedInterpreter class ...
 
-    def format_graph_for_llm(self) -> str:
-            if not self.current_graph_edges:
-                return "No significant connections found."
+    def format_graph_for_llm(self, max_edges=50) -> str:
+        """
+        Formats the graph for the LLM, but LIMITS output to the top 50 edges 
+        to prevent Context Window Errors (Error 400).
+        """
+        if not self.current_graph_edges:
+            return "No significant connections found."
 
-            graph_text = "Attribution Graph (Causal Connections):\n"
-            
-            # Sort edges by layer flow
-            sorted_edges = sorted(
-                self.current_graph_edges, 
-                key=lambda x: (x['dst_layer'], x['dst_head'], x['src_layer'])
-            )
-            
-            lines = []
-            for edge in sorted_edges:
-                # Format Source Name
-                if edge['src_type'] == 'MLP':
-                    src_name = f"L{edge['src_layer']}.MLP"
-                else:
-                    src_name = f"L{edge['src_layer']}.H{edge['src_head']}"
+        # 1. Sort edges by effect size (magnitude)
+        # We use absolute value because negative inhibition is also important
+        sorted_edges = sorted(
+            self.current_graph_edges, 
+            key=lambda x: abs(x.get('effect_size', 0)), 
+            reverse=True
+        )
 
-                # Format Dest Name
-                if edge['dst_type'] == 'MLP':
-                    dst_name = f"L{edge['dst_layer']}.MLP"
-                else:
-                    dst_name = f"L{edge['dst_layer']}.H{edge['dst_head']}"
+        # 2. Truncate list if too long
+        total_edges = len(sorted_edges)
+        if total_edges > max_edges:
+            print(f"⚠️ Graph too large ({total_edges} edges). Sending top {max_edges} to LLM.")
+            sorted_edges = sorted_edges[:max_edges]
 
-                lines.append(f"  {src_name} → {dst_name}")
+        # 3. Sort by layer flow for readability (Source Layer -> Dest Layer)
+        sorted_edges.sort(key=lambda x: (x['dst_layer'], x['dst_head'], x['src_layer']))
 
-            graph_text += "\n".join(lines)
-            return graph_text
+        graph_text = f"Attribution Graph (Showing Top {len(sorted_edges)} of {total_edges} Edges):\n"
+        
+        lines = []
+        for edge in sorted_edges:
+            # Format Source
+            if edge['src_type'] == 'MLP':
+                src_name = f"L{edge['src_layer']}.MLP"
+            elif edge['src_type'] == 'Input':
+                src_name = "Input" # Handle embedding/pos inputs
+            else:
+                src_name = f"L{edge['src_layer']}.H{edge['src_head']}"
 
+            # Format Dest
+            if edge['dst_type'] == 'MLP':
+                dst_name = f"L{edge['dst_layer']}.MLP"
+            else:
+                dst_name = f"L{edge['dst_layer']}.H{edge['dst_head']}"
+
+            # Add effect size if available
+            score = edge.get('effect_size', 0.0)
+            lines.append(f"  {src_name} -> {dst_name} [Effect: {score:.4f}]")
+
+        graph_text += "\n".join(lines)
+        return graph_text
     # ============================================================
     # STEP 3: GRAPH -> HIGH-LEVEL CAUSAL INTERPRETATION (LLM)
     # ============================================================
