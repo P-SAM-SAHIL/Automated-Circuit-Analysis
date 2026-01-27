@@ -48,14 +48,11 @@ def main():
         device="cuda" if torch.cuda.is_available() else "cpu",
         
         # 1. Fixes "Need to be able to see hook MLP inputs"
-        use_hook_mlp_in=True,
-        
-        # 2. Prevent future errors (ACDC needs these too)
-        use_attn_result=True,
-        use_split_qkv_input=True,
-        
   
     )
+    model.set_use_hook_mlp_in(True)
+    model.set_use_attn_result(True)
+    model.set_use_split_qkv_input(True)
     
     task_gen = TaskGenerator(client, model)
     interpreter = AdvancedAutomatedInterpreter(model, client)
