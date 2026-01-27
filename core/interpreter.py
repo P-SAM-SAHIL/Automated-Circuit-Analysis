@@ -85,8 +85,9 @@ class AdvancedAutomatedInterpreter:
                 verbose=True,
                 indices_mode="reverse", 
                 names_mode="normal",
-                corrupted_cache_cpu=True,
-                online_cache_cpu=True,
+
+                corrupted_cache_cpu=False,
+                online_cache_cpu=False,
                 add_sender_hooks=True,
                 add_receiver_hooks=False,
                 remove_redundant=False,

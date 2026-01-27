@@ -43,7 +43,7 @@ class RobustLLMClient:
                     messages=messages,
                     response_format={"type": "json_object"},
                     temperature=kwargs.get("temperature", 0.1),
-                    max_tokens=kwargs.get("max_tokens", 800),
+                    max_tokens=kwargs.get("max_tokens", 4096),
                 )
 
                 content = response.choices[0].message.content.strip()
