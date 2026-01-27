@@ -207,12 +207,12 @@ class AdvancedAutomatedInterpreter:
 
         # 1. Sort edges by effect size (magnitude)
         # We use absolute value because negative inhibition is also important
+
         sorted_edges = sorted(
             self.current_graph_edges, 
-            key=lambda x: abs(x.get('effect_size', 0)), 
+            key=lambda x: abs(x.get('effect_size') or 0), 
             reverse=True
         )
-
         # 2. Truncate list if too long
         total_edges = len(sorted_edges)
         if total_edges > max_edges:
