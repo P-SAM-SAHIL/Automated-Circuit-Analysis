@@ -43,7 +43,19 @@ def main():
 
     # --- INITIALIZE ---
     client = RobustLLMClient(base_url=GWDG_BASE_URL, api_key=args.apikey)
-    model = HookedTransformer.from_pretrained(args.model, device="cuda" if torch.cuda.is_available() else "cpu")
+    model = HookedTransformer.from_pretrained(
+        args.model, 
+        device="cuda" if torch.cuda.is_available() else "cpu",
+        
+        # 1. Fixes "Need to be able to see hook MLP inputs"
+        use_hook_mlp_in=True,
+        
+        # 2. Prevent future errors (ACDC needs these too)
+        use_attn_result=True,
+        use_split_qkv_input=True,
+        
+  
+    )
     
     task_gen = TaskGenerator(client, model)
     interpreter = AdvancedAutomatedInterpreter(model, client)
