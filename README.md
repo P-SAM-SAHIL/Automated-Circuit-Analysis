@@ -15,6 +15,7 @@ For full documentation, please refer to:
 !pip install transformer_lens openai wandb scikit-learn einops jaxtyping
 !apt install libgraphviz-dev
 !pip install pygraphviz
+!pip install cmapy
 ```
 ## Navigate to Project Directory
 
