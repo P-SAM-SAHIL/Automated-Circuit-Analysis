@@ -313,46 +313,61 @@ Return VALID JSON ONLY:
                 max_tokens=1000
             )
 
+            
+
             response_data = json.loads(response_content)
             hypotheses_data = response_data.get("hypotheses", [])
 
             new_hypotheses = []
             for h in hypotheses_data[:max_hypotheses]:
                 path_list = h.get('circuit_path', [])
-                parsed_path = [(int(p[0]), int(p[1])) for p in path_list]
                 
-                # Since we analyze the whole graph, we don't have a single "target head" 
-                # effectively. We set it to the last head in the chain or -1.
-                t_layer = parsed_path[-1][0] if parsed_path else -1
-                t_head = parsed_path[-1][1] if parsed_path else -1
+                # --- FIX STARTS HERE --- 
+                # Robustly parse path, handling [[0,1]] AND ["L0.H1"] AND [[0, "MLP"]]
+                parsed_path = []
+                for item in path_list:
+                    try:
+                        # Case 1: Standard [layer, head] ints -> [0, 1]
+                        if isinstance(item, list) and len(item) == 2 and isinstance(item[0], int) and isinstance(item[1], int):
+                            parsed_path.append((item[0], item[1]))
+                        
+                        # Case 2: [layer, "MLP"] mixed -> [0, "MLP"]
+                        elif isinstance(item, list) and len(item) == 2 and isinstance(item[0], int) and isinstance(item[1], str):
+                            head_val = -1 if "MLP" in item[1].upper() else int(item[1])
+                            parsed_path.append((item[0], head_val))
 
-                new_hypotheses.append(CircuitHypothesis(
-                    target_layer=t_layer,
-                    target_head=t_head,
-                    circuit_path=parsed_path,
-                    mechanism=h.get('mechanism', 'Unknown mechanism'),
-                    predicted_behavior=h.get('predicted_behavior', 'Unknown behavior')
-                ))
+                        # Case 3: String strings -> "L0.H1" or "L0.MLP"
+                        elif isinstance(item, str):
+                            # Parse "L{layer}.{type}{head}"
+                            clean_item = item.upper().replace("L", "")
+                            if "MLP" in clean_item:
+                                layer_str = clean_item.split(".")[0]
+                                parsed_path.append((int(layer_str), -1))
+                            elif "H" in clean_item:
+                                # Expect "0.H1" -> split on .H
+                                parts = clean_item.split(".H")
+                                parsed_path.append((int(parts[0]), int(parts[1])))
+                            else:
+                                # Fallback or Input node
+                                continue
+                        
+                        # Case 4: List of strings -> ["L0.MLP", ...] (The likely culprit of your error if item is list)
+                        elif isinstance(item, list) and isinstance(item[0], str):
+                             # Just recurse logic on the first item if it looks like a node name
+                             clean_item = item[0].upper().replace("L", "")
+                             if "MLP" in clean_item:
+                                 layer_str = clean_item.split(".")[0]
+                                 parsed_path.append((int(layer_str), -1))
+                             elif "H" in clean_item:
+                                 parts = clean_item.split(".H")
+                                 parsed_path.append((int(parts[0]), int(parts[1])))
 
-            self.hypotheses.extend(new_hypotheses)
-            print(f"  ✓ Generated {len(new_hypotheses)} causal hypotheses based on full graph.")
-            return new_hypotheses
+                    except Exception as e:
+                        print(f"    ⚠️ Could not parse path item '{item}': {e}")
+                        continue
 
-        except Exception as e:
-            print(f"  Hypothesis generation failed: {e}")
-            return []
 
-    # ============================================================
-    # PART 3: AUTOMATED PROBE DESIGN (FIXED)
-    # ============================================================
 
-# ============================================================
-    # STEP 4: AUTOMATED VALIDATION
-    # ============================================================
-
-# ============================================================
-    # STEP 4: AUTOMATED VALIDATION (OPTIMIZED PROBE)
-    # ============================================================
 
     def design_and_test_probe(self, hypothesis: CircuitHypothesis, n_samples: int = 40) -> float:
         """
@@ -609,32 +624,111 @@ Return VALID JSON ONLY:
         print(f"    ✓ Intervention Impact (Avg Loss Incr): {avg_impact:.2%}")
         return avg_impact
 
+    def calculate_faithfulness(self, hypothesis: CircuitHypothesis, prompts: List[str]) -> float:
+        """
+        Calculates KL Divergence between the Full Model and the Circuit.
+        Lower KL = Higher Faithfulness (The circuit explains the behavior).
+        
+        Method: Zero-Ablation of all heads NOT in the circuit.
+        """
+        if not prompts: return 10.0 # High penalty for no data
+
+        print(f"  Running faithfulness check (KL Divergence) on {len(prompts)} prompts...")
+        
+        # 1. Identify which heads to KEEP
+        # We assume hypothesis.circuit_path contains tuples of (layer, head)
+        keep_heads = set()
+        for l, h in hypothesis.circuit_path:
+            keep_heads.add((l, h))
+
+        kl_scores = []
+
+        for prompt in prompts:
+            try:
+                tokens = self.model.to_tokens(prompt)
+                
+                # 2. Run Full Model (Clean Baseline)
+                with torch.no_grad():
+                    clean_logits = self.model(tokens)
+                    clean_log_probs = F.log_softmax(clean_logits, dim=-1)
+
+                # 3. Define Hook to Ablate Everything ELSE
+                # We zero-ablate any head that is NOT in our hypothesis
+                def faithfulness_hook(z, hook):
+                    layer = hook.layer()
+                    # z shape: [batch, pos, n_heads, d_head]
+                    
+                    # We need to find which heads in this layer are NOT in our circuit
+                    n_heads = z.shape[2]
+                    for h in range(n_heads):
+                        if (layer, h) not in keep_heads:
+                            z[:, :, h, :] = 0.0 # Zero out non-circuit heads
+                    return z
+
+                # Hook on all attention output (z) layers
+                hooks = [(get_act_name("z", l), faithfulness_hook) for l in range(self.model.cfg.n_layers)]
+                
+                # 4. Run Circuit (Ablated Model)
+                with torch.no_grad():
+                    circuit_logits = self.model.run_with_hooks(
+                        tokens, 
+                        fwd_hooks=hooks
+                    )
+                    circuit_log_probs = F.log_softmax(circuit_logits, dim=-1)
+
+                # 5. Calculate KL Divergence
+                # We usually care about the prediction at the last token
+                # KL(P || Q) = sum(P * (log P - log Q))
+                p = clean_log_probs[:, -1, :].exp()
+                log_p = clean_log_probs[:, -1, :]
+                log_q = circuit_log_probs[:, -1, :]
+                
+                kl = (p * (log_p - log_q)).sum(dim=-1).item()
+                kl_scores.append(kl)
+
+            except Exception as e:
+                print(f"    Error in KL calc: {e}")
+                continue
+
+        avg_kl = float(np.mean(kl_scores)) if kl_scores else 10.0
+        print(f"    ✓ Faithfulness (KL Divergence): {avg_kl:.4f} (Lower is better)")
+        return avg_kl
+    
     def validate_circuit_hypothesis(self, hypothesis: CircuitHypothesis) -> Dict:
-        """
-        4.4 Verdict Layer
-        Aggregates validation signals into a final verdict.
-        NO human review involved.
-        """
         print(f"\n🔬 AUTOMATED VALIDATION: {hypothesis.mechanism[:40]}...")
 
         # 1. Run Probe (Does the head represent the feature?)
         probe_acc = self.design_and_test_probe(hypothesis)
         
-        # 2. Generate OOD Prompts for Interventions
+        # 2. Generate Prompts (Reuse these for both checks)
+        # Note: ACDC paper uses fixed datasets, but here we use LLM-generated ones
         adv_prompts = self.generate_adversarial_prompts(hypothesis)
         
-        # 3. Run Interventions (Is the circuit necessary?)
-        # We test on OOD prompts to see if the circuit matters there
+        # 3. Check Necessity (Intervention) - Existing Logic
         intervention_effect = self.execute_intervention(hypothesis, adv_prompts)
+        
+        # 4. Check Faithfulness (KL Divergence) - NEW LOGIC
+        faithfulness_kl = self.calculate_faithfulness(hypothesis, adv_prompts)
 
-        # 4. Scoring Logic (Adjust weights as needed)
-        # Probe > 0.7 is good. Intervention > 0.1 (10% loss increase) is significant.
+        # 5. Scoring Logic
+        # Probe: Good if > 0.7
+        score_probe = max(0, (probe_acc - 0.5) * 2) 
         
-        score_probe = max(0, (probe_acc - 0.5) * 2) # Normalize 0.5-1.0 to 0.0-1.0
-        score_intervention = min(1.0, intervention_effect * 5) # Cap effect at 20% loss increase = 1.0
+        # Intervention: Good if > 0.0 (Loss increases when circuit is broken)
+        # We cap it at 1.0
+        score_intervention = min(1.0, max(0, intervention_effect * 5))
         
-        # Simple weighted sum
-        overall_score = (score_probe * 0.6) + (score_intervention * 0.4)
+        # Faithfulness: Good if KL is LOW (near 0)
+        # We convert KL to a 0-1 score: exp(-KL)
+        # If KL is 0, score is 1.0. If KL is high (>2), score drops to 0.
+        score_faithfulness = np.exp(-faithfulness_kl)
+
+        # Weighted Sum
+        overall_score = (
+            (score_probe * 0.4) + 
+            (score_intervention * 0.3) + 
+            (score_faithfulness * 0.3)
+        )
         
         hypothesis.confidence = overall_score
         
@@ -647,9 +741,10 @@ Return VALID JSON ONLY:
             'circuit_path': hypothesis.circuit_path,
             'probe_accuracy': probe_acc,
             'intervention_effect': intervention_effect,
+            'faithfulness_kl': faithfulness_kl, # Add to report
             'overall_score': overall_score,
             'verdict': verdict
         }
         
-        print(f"  🏁 VERDICT: {verdict} (Score: {overall_score:.2f})")
+        print(f"  🏁 VERDICT: {verdict} (Score: {overall_score:.2f} | KL: {faithfulness_kl:.2f})")
         return result
