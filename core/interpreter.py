@@ -313,8 +313,6 @@ Return VALID JSON ONLY:
                 max_tokens=1000
             )
 
-            
-
             response_data = json.loads(response_content)
             hypotheses_data = response_data.get("hypotheses", [])
 
@@ -336,38 +334,77 @@ Return VALID JSON ONLY:
                             head_val = -1 if "MLP" in item[1].upper() else int(item[1])
                             parsed_path.append((item[0], head_val))
 
-                        # Case 3: String strings -> "L0.H1" or "L0.MLP"
-                        elif isinstance(item, str):
-                            # Parse "L{layer}.{type}{head}"
-                            clean_item = item.upper().replace("L", "")
-                            if "MLP" in clean_item:
-                                layer_str = clean_item.split(".")[0]
-                                parsed_path.append((int(layer_str), -1))
-                            elif "H" in clean_item:
-                                # Expect "0.H1" -> split on .H
-                                parts = clean_item.split(".H")
-                                parsed_path.append((int(parts[0]), int(parts[1])))
-                            else:
-                                # Fallback or Input node
-                                continue
+                        # Case 3 & 4: String handling (e.g. "L0.MLP" or ["L0.MLP"])
+                        node_str = None
+                        if isinstance(item, str):
+                            node_str = item
+                        elif isinstance(item, list) and len(item) > 0 and isinstance(item[0], str):
+                            node_str = item[0]
                         
-                        # Case 4: List of strings -> ["L0.MLP", ...] (The likely culprit of your error if item is list)
-                        elif isinstance(item, list) and isinstance(item[0], str):
-                             # Just recurse logic on the first item if it looks like a node name
-                             clean_item = item[0].upper().replace("L", "")
-                             if "MLP" in clean_item:
-                                 layer_str = clean_item.split(".")[0]
-                                 parsed_path.append((int(layer_str), -1))
-                             elif "H" in clean_item:
-                                 parts = clean_item.split(".H")
-                                 parsed_path.append((int(parts[0]), int(parts[1])))
+                        if node_str:
+                            clean = node_str.upper().strip()
+                            
+                            # Handle "Input" or "Embed"
+                            if "INPUT" in clean or "EMBED" in clean:
+                                parsed_path.append((0, -1)) # Treat as Layer 0, general component
+                                continue
+
+                            # Handle "L{layer}.MLP" 
+                            # We split by '.' to preserve the 'MLP' string
+                            if "MLP" in clean:
+                                parts = clean.split('.')
+                                # parts[0] is usually "L0" or "0"
+                                layer_str = parts[0].replace("L", "")
+                                parsed_path.append((int(layer_str), -1))
+                            
+                            # Handle "L{layer}.H{head}"
+                            elif ".H" in clean:
+                                parts = clean.split('.H')
+                                if len(parts) >= 2:
+                                    layer_str = parts[0].replace("L", "")
+                                    head_str = parts[1]
+                                    parsed_path.append((int(layer_str), int(head_str)))
+                            
+                            # Fallback for "L0.1" (lazy LLM format)
+                            elif "." in clean:
+                                parts = clean.replace("L", "").split(".")
+                                if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+                                    parsed_path.append((int(parts[0]), int(parts[1])))
 
                     except Exception as e:
                         print(f"    ⚠️ Could not parse path item '{item}': {e}")
                         continue
+                # --- FIX ENDS HERE ---
+
+                # If we parsed a path, set target layer/head to the LAST element
+                t_layer = parsed_path[-1][0] if parsed_path else -1
+                t_head = parsed_path[-1][1] if parsed_path else -1
+
+                new_hypotheses.append(CircuitHypothesis(
+                    target_layer=t_layer,
+                    target_head=t_head,
+                    circuit_path=parsed_path,
+                    mechanism=h.get('mechanism', 'Unknown mechanism'),
+                    predicted_behavior=h.get('predicted_behavior', 'Unknown behavior')
+                ))
+
+            self.hypotheses.extend(new_hypotheses)
+            print(f"  ✓ Generated {len(new_hypotheses)} causal hypotheses based on full graph.")
+            return new_hypotheses
+
+        except Exception as e:
+            print(f"  Hypothesis generation failed: {e}")
+            return []
 
 
 
+# ============================================================
+    # STEP 4: AUTOMATED VALIDATION
+    # ============================================================
+
+# ============================================================
+    # STEP 4: AUTOMATED VALIDATION (OPTIMIZED PROBE)
+    # ============================================================
 
     def design_and_test_probe(self, hypothesis: CircuitHypothesis, n_samples: int = 40) -> float:
         """
