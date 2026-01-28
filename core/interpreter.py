@@ -234,14 +234,21 @@ class AdvancedAutomatedInterpreter:
             else:
                 src_name = f"L{edge['src_layer']}.H{edge['src_head']}"
 
-            # Format Dest
+                     # Format Dest
             if edge['dst_type'] == 'MLP':
                 dst_name = f"L{edge['dst_layer']}.MLP"
             else:
                 dst_name = f"L{edge['dst_layer']}.H{edge['dst_head']}"
 
-            # Add effect size if available
-            score = edge.get('effect_size', 0.0)
+            # --- FIX STARTS HERE ---
+            # Old Code (Causes Crash):
+            # score = edge.get('effect_size', 0.0) 
+            
+            # New Code (Handles None correctly):
+            raw_score = edge.get('effect_size')
+            score = raw_score if raw_score is not None else 0.0
+            # --- FIX ENDS HERE ---
+
             lines.append(f"  {src_name} -> {dst_name} [Effect: {score:.4f}]")
 
         graph_text += "\n".join(lines)
