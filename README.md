@@ -21,6 +21,7 @@ For full documentation, please refer to:
 
 ```
 %cd /content/Automated-Circuit-Analysis
+%mkdir ims
 ```
 ## Example run
 ```
